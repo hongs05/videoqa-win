@@ -1,0 +1,33 @@
+[project]
+name = "videoqa-win"
+version = "0.1.0"
+description = "VideoQA para Windows — pre-chequeo local de videos antes de subirlos"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "videoqa @ git+https://github.com/hongs05/videoqa@main",
+    "rapidocr-onnxruntime>=1.3",
+    "faster-whisper>=1.1",
+    "spylls>=0.1.7",
+    "requests>=2.31",
+]
+
+[project.scripts]
+videoqa-win = "videoqa_win.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+# Necesario para depender del motor por git (videoqa @ git+https://…).
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["videoqa_win"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["lento: descarga modelos o corre ffmpeg; VIDEOQA_WIN_LENTO=1 para incluirlos"]
