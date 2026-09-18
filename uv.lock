@@ -694,7 +694,7 @@ wheels = [
 [[package]]
 name = "videoqa"
 version = "0.1.0"
-source = { git = "https://github.com/hongs05/videoqa?rev=main#e683dcf4e8304cda08b1998d0482aba42258592a" }
+source = { git = "https://github.com/hongs05/videoqa?rev=main#50b5a278efd1c282a5e90d35b6874b542abb715a" }
 dependencies = [
     { name = "google-auth" },
     { name = "gspread" },
