@@ -25,6 +25,13 @@ Usa el motor `videoqa` como librería y le registra tres implementaciones que no
 Todo lo demás —checks de color y tiempos, reporte, carpetas, watcher— viene del motor, así que
 "revisar" significa lo mismo en las dos máquinas.
 
+## Estado
+
+Los tres backends y el pipeline están probados de punta a punta contra los fixtures del motor
+(en macOS, que es donde se desarrolla). Lo específico de Windows — los `.bat`, `winget` y el
+arranque automático — **solo puede validarse en un PC real**: la primera instalación es la
+verificación de verdad, y para eso está `Diagnostico.bat`.
+
 ## Desarrollo
 
 ```bash
