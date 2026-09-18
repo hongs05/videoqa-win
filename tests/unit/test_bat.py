@@ -28,6 +28,8 @@ def test_saltos_de_linea_de_windows(nombre):
 def test_las_rutas_van_entre_comillas(nombre):
     texto = (BAT / nombre).read_text(encoding="utf-8")
     for linea in texto.splitlines():
+        if linea.strip().lower().startswith(("echo", ">>", ">")):
+            continue  # texto que se le muestra al editor, no una ruta de comando
         if "%VQ%\\" in linea or "%PY%" in linea:
             assert '"' in linea, f"{nombre}: ruta sin comillas -> {linea}"
 
