@@ -100,3 +100,67 @@ def test_transcripcion_real_de_un_fixture(tmp_path):
     assert out["language"] == "es"
     assert "oferta" in out["text"].lower() or "verano" in out["text"].lower()
     assert all(s["end"] >= s["start"] for s in out["segments"])
+
+
+def test_si_la_gpu_falla_reintenta_en_cpu(monkeypatch, tmp_path):
+    """Con GPU pero sin librerías CUDA, antes se quedaba sin transcripción."""
+    from videoqa.job import Job
+
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"x")
+    job = Job(video, tmp_path / "jobs")
+    monkeypatch.setattr(asr_faster, "extract_audio", lambda video, wav: None)
+    monkeypatch.setattr(asr_faster, "_hay_gpu_nvidia", lambda: True)
+
+    intentos = []
+
+    class ModeloCPU:
+        def transcribe(self, ruta, language, vad_filter=True):
+            return iter([seg(0.0, 1.0, "hola")]), SimpleNamespace(language="es", duration=1.0)
+
+    def cargar(nombre, device, compute_type):
+        intentos.append((nombre, device))
+        if device == "cuda":
+            raise RuntimeError("Library cudnn_ops64_9.dll is not found")
+        return ModeloCPU()
+
+    monkeypatch.setattr(asr_faster, "_cargar_modelo", cargar)
+    out = asr_faster.transcribe(job, True, "auto")
+    assert intentos == [("medium", "cuda"), ("small", "cpu")]
+    assert out["text"] == "hola", "tras caer a CPU tiene que transcribir igual"
+
+
+def test_si_fallan_gpu_y_cpu_devuelve_vacio_sin_lanzar(monkeypatch, tmp_path):
+    from videoqa.job import Job
+
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"x")
+    job = Job(video, tmp_path / "jobs")
+    monkeypatch.setattr(asr_faster, "extract_audio", lambda video, wav: None)
+    monkeypatch.setattr(asr_faster, "_hay_gpu_nvidia", lambda: True)
+
+    def siempre_falla(nombre, device, compute_type):
+        raise RuntimeError("nada funciona")
+
+    monkeypatch.setattr(asr_faster, "_cargar_modelo", siempre_falla)
+    assert asr_faster.transcribe(job, True, "auto") == {"language": "es", "text": "", "segments": []}
+
+
+def test_sin_gpu_no_hay_reintento(monkeypatch, tmp_path):
+    from videoqa.job import Job
+
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"x")
+    job = Job(video, tmp_path / "jobs")
+    monkeypatch.setattr(asr_faster, "extract_audio", lambda video, wav: None)
+    monkeypatch.setattr(asr_faster, "_hay_gpu_nvidia", lambda: False)
+
+    intentos = []
+
+    def cargar(nombre, device, compute_type):
+        intentos.append(device)
+        raise RuntimeError("modelo corrupto")
+
+    monkeypatch.setattr(asr_faster, "_cargar_modelo", cargar)
+    asr_faster.transcribe(job, True, "auto")
+    assert intentos == ["cpu"], "sin GPU no tiene sentido reintentar"

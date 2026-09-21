@@ -18,6 +18,7 @@ from videoqa_win.paths import modelos_dir
 log = logging.getLogger("videoqa")
 
 VACIO = {"language": "es", "text": "", "segments": []}
+CPU_MODELO = "small"   # el que se usa al caer de GPU a CPU
 
 
 def _hay_gpu_nvidia() -> bool:
@@ -57,6 +58,12 @@ def normalizar(segmentos, info) -> dict:
             "segments": limpios}
 
 
+def _intentar(wav: Path, nombre: str, device: str, compute_type: str):
+    modelo = _cargar_modelo(nombre, device, compute_type)
+    segmentos, info = modelo.transcribe(str(wav), language="es", vad_filter=True)
+    return normalizar(segmentos, info)
+
+
 def transcribe(job: Job, has_audio: bool, model: str) -> dict:
     """`model` se ignora salvo que sea un nombre de faster-whisper distinto de 'auto'."""
     if not has_audio:
@@ -64,13 +71,32 @@ def transcribe(job: Job, has_audio: bool, model: str) -> dict:
     wav = job.path("audio.wav")
     try:
         extract_audio(job.video, wav)
-        device, compute_type, nombre = elegir_dispositivo()
-        if model and model != "auto" and "/" not in model:
-            nombre = model
-        log.info("[%s] transcribiendo con %s en %s", job.name, nombre, device)
-        modelo = _cargar_modelo(nombre, device, compute_type)
-        segmentos, info = modelo.transcribe(str(wav), language="es", vad_filter=True)
-        return normalizar(segmentos, info)
-    except Exception as e:  # noqa: BLE001 — sin transcripción se sigue con los checks visuales
-        log.warning("[%s] no se pudo transcribir (%s): %s", job.name, type(e).__name__, e)
+    except Exception as e:  # noqa: BLE001
+        log.warning("[%s] no se pudo extraer el audio (%s): %s", job.name, type(e).__name__, e)
         return {"language": "es", "text": "", "segments": []}
+
+    device, compute_type, nombre = elegir_dispositivo()
+    if model and model != "auto" and "/" not in model:
+        nombre = model
+
+    intentos = [(nombre, device, compute_type)]
+    if device == "cuda":
+        # Hay GPU NVIDIA, pero faster-whisper necesita además las librerías CUDA
+        # (cuBLAS y cuDNN). Si no están, cargar el modelo falla: en vez de
+        # quedarnos sin transcripción, se reintenta en CPU.
+        intentos.append((CPU_MODELO, "cpu", "int8"))
+
+    ultimo: Exception | None = None
+    for nombre_i, device_i, compute_i in intentos:
+        try:
+            log.info("[%s] transcribiendo con %s en %s", job.name, nombre_i, device_i)
+            return _intentar(wav, nombre_i, device_i, compute_i)
+        except Exception as e:  # noqa: BLE001
+            ultimo = e
+            if device_i == "cuda":
+                log.warning("[%s] la GPU no pudo usarse (%s): reintento en CPU. "
+                            "Para usar la GPU faltan las librerías CUDA de NVIDIA.",
+                            job.name, type(e).__name__)
+            else:
+                log.warning("[%s] no se pudo transcribir (%s): %s", job.name, type(e).__name__, e)
+    return {"language": "es", "text": "", "segments": []}

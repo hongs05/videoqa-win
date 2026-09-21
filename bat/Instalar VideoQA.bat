@@ -62,6 +62,16 @@ if errorlevel 1 (
   exit /b 1
 )
 
+where nvidia-smi >nul 2>&1
+if not errorlevel 1 (
+  echo         Detecte una tarjeta NVIDIA. Instalando el soporte para usarla
+  echo         ^(unos 600 MB; si falla, VideoQA funciona igual, solo mas lento^).
+  "%PY%" -m pip install --quiet nvidia-cublas-cu12 nvidia-cudnn-cu12
+  if errorlevel 1 (
+    echo   [!] No pude instalar el soporte de la tarjeta. Se usara el procesador.
+  )
+)
+
 echo   [5/5] Carpetas y diccionario
 "%PY%" -m videoqa_win.cli instalar-datos
 if errorlevel 1 (
